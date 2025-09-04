@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASHC Mining — Admin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg:linear-gradient(135deg,#041025,#092033);
+      --card:#071226;
+      --muted:#9fb3c8;
+      --accent:#38bdf8;
+      --danger:#ff6b6b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:#e8f2fb;display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:28px}
+    .wrap{width:100%;max-width:980px}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:16px;border-radius:12px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    h1{color:var(--accent);margin:0}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    input,select,button{width:100%;padding:10px;border-radius:8px;border:none;background:rgba(255,255,255,0.02);color:inherit;margin-top:8px}
+    button.primary{background:linear-gradient(90deg,var(--accent),#0ea5e9);font-weight:700;cursor:pointer}
+    button.warn{background:var(--danger);color:#111}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px}
+    img.avatarSmall{width:36px;height:36px;border-radius:50%;object-fit:cover;vertical-align:middle}
+    .smallBtn{padding:6px 8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+    .muted{color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>Admin — ASHC Mining</h1>
+      <div style="text-align:right">
+        <div class="muted">Admin login</div>
+        <input id="adminPin" type="password" placeholder="Enter Admin PIN" style="width:220px" />
+        <button id="btnAdminLogin" class="primary">Sign In</button>
+      </div>
+    </div>
+
+    <div id="adminPanel" style="display:none">
+      <div class="row">
+        <div class="col card">
+          <h3>Settings</h3>
+          <label class="muted">Mining reward (coins)</label>
+          <input id="setReward" type="number" min="0" step="0.1" />
+          <label class="muted">Cooldown (hours)</label>
+          <input id="setCooldown" type="number" min="0" step="0.5" />
+          <label class="muted">Change Admin PIN</label>
+          <input id="setPin" type="password" placeholder="New PIN (leave blank to keep)" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="saveSettings" class="primary">Save</button>
+            <button id="resetDefaults" class="smallBtn">Reset</button>
+          </div>
+          <div style="margin-top:12px">
+            <div class="muted">Backup / Restore</div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button id="exportAll" class="smallBtn">Export all</button>
+              <input id="importAllFile" type="file" accept="application/json" style="display:none" />
+              <button id="importAllBtn" class="smallBtn">Import all</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col card">
+          <h3>Users</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="searchUser" type="text" placeholder="Search username..." />
+            <input id="airdropAmount" type="number" placeholder="Airdrop amt" style="width:130px" />
+            <button id="airdropBtn" class="smallBtn">Airdrop selected</button>
+            <button id="airdropAllBtn" class="smallBtn">Airdrop all</button>
+          </div>
+
+          <table id="usersTable">
+            <thead><tr><th></th><th>User</th><th>Balance</th><th>Last Mine</th><th>Actions</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="muted" style="margin-top:8px">Tip: select users with checkboxes to airdrop or delete in bulk (use Delete action row by row).</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="adminMsg" class="muted" style="margin-top:12px"></div>
+  </div>
+
+<script>
+/* Utilities */
+const SETTINGS_KEY = "app_settings";
+function getSettings(){ const d = localStorage.getItem(SETTINGS_KEY); if(d) try{return JSON.parse(d)}catch{} return { reward:3, cooldownHours:10, adminPin:"admin123" }; }
+function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+function userKey(u){ return "user_"+u; }
+function getUser(u){ const d = localStorage.getItem(userKey(u)); return d?JSON.parse(d):null; }
+function saveUser(obj){ localStorage.setItem(userKey(obj.username), JSON.stringify(obj)); }
+function deleteUser(u){ localStorage.removeItem(userKey(u)); }
+function allUsers(){
+  const out = [];
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith("user_")) {
+      try { out.push(JSON.parse(localStorage.getItem(k))); } catch(e){}
+    }
+  }
+  out.sort((a,b)=>a.username.localeCompare(b.username));
+  return out;
+}
+
+/* Admin login */
+const btnAdminLogin = document.getElementById("btnAdminLogin");
+const adminPinInput = document.getElementById("adminPin");
+const adminPanel = document.getElementById("adminPanel");
+const adminMsg = document.getElementById("adminMsg");
+btnAdminLogin.addEventListener("click", ()=>{
+  const pin = adminPinInput.value;
+  const settings = getSettings();
+  if(pin === settings.adminPin){
+    adminPanel.style.display = "block";
+    adminMsg.textContent = "Signed in as Admin";
+    loadSettingsToUI();
+    renderUsers();
+  } else {
+    adminMsg.textContent = "❌ Wrong PIN";
+  }
+});
+
+/* Settings UI */
+const setReward = document.getElementById("setReward");
+const setCooldown = document.getElementById("setCooldown");
+const setPin = document.getElementById("setPin");
+const saveSettingsBtn = document.getElementById("saveSettings");
+const resetDefaultsBtn = document.getElementById("resetDefaults");
+saveSettingsBtn.addEventListener("click", ()=>{
+  const s = getSettings();
+  const r = Number(setReward.value || s.reward);
+  const cd = Number(setCooldown.value || s.cooldownHours);
+  const newPin = setPin.value.trim();
+  if(isNaN(r) || isNaN(cd)){ adminMsg.textContent = "❌ Invalid numbers"; return; }
+  s.reward = r; s.cooldownHours = cd;
+  if(newPin) s.adminPin = newPin;
+  saveSettings(s);
+  adminMsg.textContent = "✅ Settings saved";
+  setPin.value = "";
+});
+resetDefaultsBtn.addEventListener("click", ()=>{
+  saveSettings({ reward:3, cooldownHours:10, adminPin:"admin123" });
+  loadSettingsToUI();
+  adminMsg.textContent = "🔄 Defaults restored";
+});
+function loadSettingsToUI(){
+  const s = getSettings();
+  setReward.value = s.reward;
+  setCooldown.value = s.cooldownHours;
+}
+
+/* Users table */
+const usersTableBody = document.querySelector("#usersTable tbody");
+const searchUser = document.getElementById("searchUser");
+function renderUsers(){
+  const q = (searchUser.value || "").toLowerCase();
+  const users = allUsers().filter(u => u.username.toLowerCase().includes(q));
+  usersTableBody.innerHTML = "";
+  for(const u of users){
+    const tr = document.createElement("tr");
+    const tdCheck = document.createElement("td");
+    tdCheck.innerHTML = `<input type="checkbox" data-user="${u.username}" />`;
+    const tdUser = document.createElement("td");
+    tdUser.innerHTML = `${u.avatar ? `<img class="avatarSmall" src="${u.avatar}" />` : `<img class="avatarSmall" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36'%3E%3Crect width='36' height='36' fill='%23071226'/%3E%3Ctext x='50%25' y='55%25' font-size='18' fill='%239fb3c8' text-anchor='middle' font-family='Arial'>${u.username[0].toUpperCase()}</text>%3C/svg%3E` } ${u.username}`;
+    const tdBal = document.createElement("td"); tdBal.textContent = Number(u.balance).toFixed(6);
+    const tdLast = document.createElement("td"); tdLast.textContent = u.lastMine ? new Date(u.lastMine).toLocaleString() : "—";
+    const tdActions = document.createElement("td");
+    tdActions.innerHTML = `
+      <button class="smallBtn" data-edit="${u.username}">Edit</button>
+      <button class="smallBtn" data-reset="${u.username}">ResetMine</button>
+      <button class="smallBtn" data-delete="${u.username}" style="background:#2b0505;color:#fff">Delete</button>
+    `;
+    tr.appendChild(tdCheck); tr.appendChild(tdUser); tr.appendChild(tdBal); tr.appendChild(tdLast); tr.appendChild(tdActions);
+    usersTableBody.appendChild(tr);
+  }
+}
+searchUser.addEventListener("input", renderUsers);
+usersTableBody.addEventListener("click", (e)=>{
+  const edit = e.target.dataset.edit;
+  const reset = e.target.dataset.reset;
+  const del = e.target.dataset.delete;
+  if(edit){
+    const u = getUser(edit);
+    if(!u) return;
+    const val = prompt(`Set new balance for ${u.username}:`, u.balance);
+    if(val === null) return;
+    const n = Number(val);
+    if(isNaN(n)) { alert("Invalid number"); return; }
+    u.balance = Number(n.toFixed(6));
+    saveUser(u); renderUsers();
+  } else if(reset){
+    const u = getUser(reset); if(!u) return;
+    u.lastMine = 0; saveUser(u); renderUsers();
+  } else if(del){
+    if(!confirm(`Delete user ${del}?`)) return;
+    deleteUser(del); renderUsers();
+  }
+});
+
+/* Airdrop */
+const airdropBtn = document.getElementById("airdropBtn");
+const airdropAllBtn = document.getElementById("airdropAllBtn");
+const airdropAmountInput = document.getElementById("airdropAmount");
+
+airdropBtn.addEventListener("click", ()=>{
+  const amt = Number(airdropAmountInput.value);
+  if(!amt || isNaN(amt)){ alert("Enter amount"); return; }
+  const checked = Array.from(document.querySelectorAll('#usersTable tbody input[type=checkbox]:checked')).map(ch=>ch.dataset.user);
+  if(checked.length === 0){ alert("Select users"); return; }
+  for(const u of checked){
+    const obj = getUser(u); if(!obj) continue;
+    obj.balance = Number((Number(obj.balance) + amt).toFixed(6)); saveUser(obj);
+  }
+  renderUsers(); alert(`Airdropped ${amt} to ${checked.length} users`);
+});
+airdropAllBtn.addEventListener("click", ()=>{
+  const amt = Number(airdropAmountInput.value);
+  if(!amt || isNaN(amt)){ alert("Enter amount"); return; }
+  const users = allUsers();
+  for(const u of users){ u.balance = Number((Number(u.balance) + amt).toFixed(6)); saveUser(u); }
+  renderUsers(); alert(`Airdropped ${amt} to all (${users.length}) users`);
+});
+
+/* Export/Import all */
+const exportAllBtn = document.getElementById("exportAll");
+const importAllFile = document.getElementById("importAllFile");
+const importAllBtn = document.getElementById("importAllBtn");
+
+exportAllBtn.addEventListener("click", ()=>{
+  const data = { settings: getSettings(), users: allUsers() };
+  const blob = new Blob([JSON.stringify(data,null,2)], { type: 'application/json' });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `ashc_all_backup.json`; a.click(); URL.revokeObjectURL(a.href);
+});
+importAllBtn.addEventListener("click", ()=>importAllFile.click());
+importAllFile.addEventListener("change", (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader(); r.onload = ev=>{
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(data.settings) saveSettings(data.settings);
+      if(Array.isArray(data.users)){
+        for(const u of data.users){
+          if(u.username && u.password) saveUser(u);
+        }
+      }
+      loadSettingsToUI();
+      renderUsers();
+      alert("Import complete");
+    } catch(err){
+      alert("Import failed");
+    }
+  }; r.readAsText(f);
+});
+
+/* Initial settings to UI on load if admin already signed in */
+function init(){
+  loadSettingsToUI();
+  renderUsers();
+}
+init();
+</script>
+</body>
+</html>

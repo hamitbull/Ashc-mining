@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASHC Mining — User</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{
+      --bg1: linear-gradient(135deg,#071226,#0f172a);
+      --card:#0f172a;
+      --muted:#9fb3c8;
+      --accent1:#38bdf8;
+      --accent2:#0ea5e9;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg1);color:#e6eef8;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .wrap{width:100%;max-width:420px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:20px;box-shadow:0 10px 30px rgba(2,6,23,0.6);margin-bottom:14px}
+    h1,h2{margin:0;color:var(--accent1)}
+    input[type="text"],input[type="password"],input[type="file"],button,select{width:100%;padding:12px;border-radius:10px;border:none;background:var(--glass);color:inherit;margin-top:10px}
+    label.small{font-size:13px;color:var(--muted);display:block;margin-top:8px}
+    .row{display:flex;gap:10px}
+    .row > *{flex:1}
+    button.primary{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#001018;font-weight:700;cursor:pointer;box-shadow:0 8px 22px rgba(14,165,233,0.12)}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+    .muted{color:var(--muted);font-size:13px;margin-top:8px}
+    .center{text-align:center}
+    .avatarWrap{display:flex;align-items:center;gap:12px}
+    .avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#0b1220,#16313f);display:flex;align-items:center;justify-content:center;font-size:28px}
+    .balance{font-size:22px;color:#e6eef8;margin:8px 0}
+    .msg{min-height:20px;color:#facc15;margin-top:8px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left;font-size:13px}
+    .smallbtn{padding:6px 8px;border-radius:8px;background:#071226;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+    .link{color:var(--accent1);cursor:pointer}
+    footer{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- REGISTER -->
+    <div class="card" id="registerCard">
+      <h2>Create account</h2>
+      <div class="avatarWrap">
+        <div id="regAvatar" class="avatar">👤</div>
+        <div style="flex:1">
+          <input id="regUsername" type="text" placeholder="Username" />
+          <input id="regPassword" type="password" placeholder="Password" />
+          <label class="small">Upload Profile Picture (optional)</label>
+          <input id="regAvatarFile" type="file" accept="image/*" />
+        </div>
+      </div>
+      <button class="primary" id="btnRegister">Create account</button>
+      <div class="muted center">Already have account? <span class="link" id="toLogin">Login</span></div>
+      <div id="regMsg" class="msg"></div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="card" id="loginCard" style="display:none">
+      <h2>Login</h2>
+      <input id="loginUsername" type="text" placeholder="Username" />
+      <input id="loginPassword" type="password" placeholder="Password" />
+      <button class="primary" id="btnLogin">Login</button>
+      <div class="muted center">No account? <span class="link" id="toRegister">Create</span></div>
+      <div id="loginMsg" class="msg"></div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="card" id="dashCard" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div class="avatarWrap">
+          <div id="dashAvatar" class="avatar">👤</div>
+          <div>
+            <div style="font-size:15px;color:var(--muted)">Signed in as</div>
+            <div id="dashUser" style="font-weight:700;font-size:16px"></div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="muted">Reward</div>
+          <div id="liveReward" style="font-weight:700">3</div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="center">
+        <div class="card" style="padding:14px">
+          <div class="muted">Balance</div>
+          <div class="balance" id="userBalance">0.000000</div>
+          <button class="primary" id="mineBtn">Start Mining</button>
+          <div id="mineMsg" class="msg"></div>
+        </div>
+
+        <div style="margin-top:10px;text-align:left">
+          <div class="muted">Backup / Restore Wallet</div>
+          <div class="row" style="margin-top:8px">
+            <button class="ghost" id="exportBtn">Export Wallet</button>
+            <input id="importFile" type="file" accept="application/json" style="display:none" />
+            <button class="ghost" id="importBtn">Import Wallet</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px" class="muted">
+          <span class="link" id="toAdmin">Admin panel</span> • <span class="link" id="logoutBtn">Logout</span>
+        </div>
+      </div>
+    </div>
+
+    <footer>ASHC Mining — browser-only demo • Data stored in localStorage</footer>
+  </div>
+
+<script>
+/* Storage helpers & defaults */
+const SETTINGS_KEY = "app_settings";
+function getSettings(){
+  const d = localStorage.getItem(SETTINGS_KEY);
+  if(d) try { return JSON.parse(d); } catch(e){}
+  return { reward:3, cooldownHours:10, adminPin:"admin123" };
+}
+function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+function userKey(u){ return "user_"+u; }
+function saveUser(obj){ localStorage.setItem(userKey(obj.username), JSON.stringify(obj)); }
+function getUser(u){ const d = localStorage.getItem(userKey(u)); return d?JSON.parse(d):null; }
+
+/* UI refs */
+const registerCard = document.getElementById("registerCard");
+const loginCard = document.getElementById("loginCard");
+const dashCard = document.getElementById("dashCard");
+
+const regUsername = document.getElementById("regUsername");
+const regPassword = document.getElementById("regPassword");
+const regAvatarFile = document.getElementById("regAvatarFile");
+const regAvatar = document.getElementById("regAvatar");
+const regMsg = document.getElementById("regMsg");
+
+const loginUsername = document.getElementById("loginUsername");
+const loginPassword = document.getElementById("loginPassword");
+const loginMsg = document.getElementById("loginMsg");
+
+const dashUser = document.getElementById("dashUser");
+const dashAvatar = document.getElementById("dashAvatar");
+const userBalance = document.getElementById("userBalance");
+const mineBtn = document.getElementById("mineBtn");
+const mineMsg = document.getElementById("mineMsg");
+const exportBtn = document.getElementById("exportBtn");
+const importBtn = document.getElementById("importBtn");
+const importFile = document.getElementById("importFile");
+
+const toLogin = document.getElementById("toLogin");
+const toRegister = document.getElementById("toRegister");
+const toAdmin = document.getElementById("toAdmin");
+const logoutBtn = document.getElementById("logoutBtn");
+
+/* Avatar preview on register */
+let regAvatarBase = ""; // base64
+regAvatarFile.addEventListener("change", e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    regAvatarBase = ev.target.result;
+    regAvatar.innerHTML = `<img src="${regAvatarBase}" style="width:72px;height:72px;border-radius:50%;object-fit:cover" />`;
+  };
+  r.readAsDataURL(f);
+});
+
+/* Navigation */
+toLogin.addEventListener("click", ()=>{ registerCard.style.display="none"; loginCard.style.display="block"; dashCard.style.display="none"; });
+toRegister.addEventListener("click", ()=>{ registerCard.style.display="block"; loginCard.style.display="none"; dashCard.style.display="none"; });
+toAdmin.addEventListener("click", ()=>{ window.open('admin.html','_blank'); });
+
+/* Register */
+document.getElementById("btnRegister").addEventListener("click", ()=>{
+  regMsg.textContent = "";
+  const u = regUsername.value.trim();
+  const p = regPassword.value;
+  if(!u||!p){ regMsg.textContent = "⚠️ Fill in username & password"; return; }
+  if(localStorage.getItem(userKey(u))){ regMsg.textContent = "❌ Username already exists"; return; }
+  const userObj = { username: u, password: p, balance: 0, lastMine: 0, avatar: regAvatarBase || "" };
+  saveUser(userObj);
+  regMsg.textContent = "✅ Account created — please login";
+  // clear inputs
+  regUsername.value=""; regPassword.value=""; regAvatarFile.value=""; regAvatarBase="";
+  regAvatar.innerHTML = "👤";
+  // show login
+  registerCard.style.display="none"; loginCard.style.display="block";
+});
+
+/* Login */
+document.getElementById("btnLogin").addEventListener("click", ()=>{
+  loginMsg.textContent = "";
+  const u = loginUsername.value.trim();
+  const p = loginPassword.value;
+  const user = getUser(u);
+  if(!user){ loginMsg.textContent = "❌ User not found"; return; }
+  if(user.password !== p){ loginMsg.textContent = "❌ Wrong password"; return; }
+  // set session
+  localStorage.setItem("currentUser", u);
+  loginUsername.value=""; loginPassword.value="";
+  showDashboardFor(u);
+});
+
+/* Show dashboard */
+function showDashboardFor(username){
+  const user = getUser(username);
+  if(!user) return;
+  registerCard.style.display="none"; loginCard.style.display="none"; dashCard.style.display="block";
+  dashUser.textContent = user.username;
+  userBalance.textContent = Number(user.balance).toFixed(6);
+  if(user.avatar){
+    dashAvatar.innerHTML = `<img src="${user.avatar}" style="width:72px;height:72px;border-radius:50%;object-fit:cover" />`;
+  } else {
+    dashAvatar.innerHTML = "👤";
+  }
+  mineMsg.textContent = "";
+  updateRewardBadge();
+  setupMining(user);
+}
+
+/* Mining logic */
+function setupMining(user){
+  const settings = getSettings();
+  const cooldownMs = settings.cooldownHours * 3600 * 1000;
+  const now = Date.now();
+  if(!user.lastMine) user.lastMine = 0;
+
+  function check(){
+    const stored = getUser(user.username);
+    const last = stored?.lastMine || 0;
+    if(now - last < cooldownMs){
+      let rem = cooldownMs - (Date.now() - last);
+      if(rem < 0) rem = 0;
+      mineBtn.disabled = true;
+      mineMsg.textContent = `⏳ Wait ${(rem/(1000*60*60)).toFixed(2)}h before mining`;
+    } else {
+      mineBtn.disabled = false;
+      mineMsg.textContent = "";
+    }
+    // update UI balance in case changed
+    const fresh = getUser(user.username);
+    if(fresh) userBalance.textContent = Number(fresh.balance).toFixed(6);
+  }
+  check();
+
+  mineBtn.onclick = function(){
+    const s = getSettings();
+    const cd = s.cooldownHours * 3600 * 1000;
+    const now = Date.now();
+    const stored = getUser(user.username);
+    if(now - (stored.lastMine || 0) >= cd){
+      stored.balance = Number((Number(stored.balance) + Number(s.reward)).toFixed(6));
+      stored.lastMine = now;
+      saveUser(stored);
+      userBalance.textContent = Number(stored.balance).toFixed(6);
+      mineMsg.textContent = "✅ You mined " + s.reward + " ASHC";
+      mineBtn.disabled = true;
+      setTimeout(()=>check(), 300);
+    } else {
+      check();
+    }
+  };
+}
+
+/* update reward badge (reads settings) */
+function updateRewardBadge(){
+  const s = getSettings();
+  document.getElementById("liveReward").textContent = s.reward;
+}
+
+/* Export / Import wallet for current user */
+exportBtn.addEventListener("click", ()=>{
+  const cur = localStorage.getItem("currentUser");
+  if(!cur){ alert("Not signed in"); return; }
+  const data = localStorage.getItem(userKey(cur));
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${cur}_wallet.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+importBtn.addEventListener("click", ()=>importFile.click());
+importFile.addEventListener("change", e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try {
+      const obj = JSON.parse(ev.target.result);
+      if(!obj.username || !obj.password){ alert("Invalid wallet file"); return; }
+      saveUser(obj);
+      alert("✅ Wallet imported. You can now login.");
+      // navigate to login
+      registerCard.style.display="none"; loginCard.style.display="block"; dashCard.style.display="none";
+    } catch(err){
+      alert("Import failed");
+    }
+  };
+  reader.readAsText(f);
+});
+
+/* Logout */
+logoutBtn.addEventListener("click", ()=>{
+  localStorage.removeItem("currentUser");
+  dashCard.style.display="none"; loginCard.style.display="block";
+});
+
+/* Auto session */
+(function boot(){
+  const cur = localStorage.getItem("currentUser");
+  if(cur){ showDashboardFor(cur); }
+})();
+</script>
+</body>
+</html>
